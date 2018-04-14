@@ -1,0 +1,255 @@
+// image_sythesize.cpp : 定义控制台应用程序的入口点。
+
+#include"stdafx.h"
+#include<iostream>
+#include<vector>
+#include<opencv2/core/core.hpp>
+#include<opencv2/highgui/highgui.hpp>
+#include<opencv2\imgproc\imgproc.hpp>
+#include<time.h>
+#define WindowSize 7//主要决定相似性的参数,windowsize越大，程序越快，但相似效果越差
+#define  ErrThreshold 0.07//误差阈值,控制findmatches可选匹配项的数目,与块相似程度没多大关系
+#define sigma 0.4//控制相似方式，非常重要，推荐在2以内，权值分配比较有效力，合理
+#define maxerrthreshold 0.3
+#define Expandsize 5.0
+typedef struct Unfilled_point
+{
+	cv::Point2i position;
+	double filedNeighbors;
+}unfilledpoint;
+typedef struct Matches
+{
+	cv::Point2i position;
+	double err;
+}matches;
+long monitor = 0;//记录运行次数
+int mtrue = 0;//记录已经操作的像素值
+//--------------------------------------------------------------------------------------------------------------
+inline void GrowImage(const cv::Mat& sampleimage, cv::Mat& outputimage, float  size);
+inline void InitImage(cv::Mat& outputimage);
+inline bool IsNotFiled(cv::Mat& sampleimage);
+inline void Loadimage(const cv::Mat&sampleimage, cv::Mat&outputimage, float  size);
+inline std::vector<cv::Point2i> FindUnfiledNeighbors(cv::Mat const &outputimage);
+inline bool isinImage(int x, int y, const cv::Mat &img);
+inline bool isLegalInImage(int x, int y, const cv::Mat &img);
+inline cv::Mat FindNeighborWindow(cv::Mat &img, cv::Point2i pixel);
+inline cv::Mat GetGaussian(void);
+inline std::vector<matches>  FindMatches(const cv::Mat& Template, const cv::Mat & sampleimage, cv::Mat& outputimage, cv::Point2i  templateCenter, cv::Mat& GaussianMask);
+//---------------------------------------------一通道--------------------------------------------------------------
+bool isLegalInImage(int x, int y, const cv::Mat &img)
+{
+	return ((x >= 0 && x < img.rows) && (y >= 0 && y < img.cols));
+}
+bool isinImage(int x, int y, const cv::Mat &img)//
+{
+	if ((x >= 0 && x < img.rows) && (y >= 0 && y < img.cols))//防止越界
+		if (img.at<double>(x, y) != 0)
+			return  true;
+	return false;
+}
+bool SortfiledNeighbors(const unfilledpoint &v1, const unfilledpoint &v2)
+{
+	return v1.filedNeighbors >v2.filedNeighbors;//降序
+}
+int main()
+{
+	register cv::Mat srcimage = cv::imread("pic3.jpg", 0);//读出灰度图
+	register cv::Mat dstimage;
+	srcimage.convertTo(srcimage, CV_64FC1, 1.0 / 255.0, 0);
+	//cv::imshow("游戏原画3", srcimage);
+	GrowImage(srcimage, dstimage, Expandsize);
+	dstimage.convertTo(srcimage, CV_8UC1, 255, 0);
+	cv::imshow("游戏原画2", dstimage);
+	//cv::imwrite("output.jpg", dstimage);
+	//cv::imwrite("outputbmp.bmp", dstimage);
+	cv::waitKey(0);
+	return 0;
+
+}
+void Loadimage(const cv::Mat&sampleimage, cv::Mat&outputimage, float size)//3 ok ok
+{
+	for (int i = 0; i <= sampleimage.rows; i++)
+		for (int j = 0; j < sampleimage.cols; j++)
+			outputimage.at<double >((i + (int)size*sampleimage.rows / 2 - sampleimage.rows / 2), (j + (int)size*sampleimage.cols / 2 - sampleimage.cols / 2)) = sampleimage.at<double>(i, j);
+}
+bool IsNotFiled(cv::Mat& sampleimage) //3   ok
+{
+	bool flag = false;
+	for (int i = 0; i < sampleimage.rows; i++)
+	{
+		double *pointer = sampleimage.ptr< double>(i);
+		for (int j = 0; j < sampleimage.cols; j++)
+			if (pointer[j] == 0)
+				flag = true;
+	}
+	return flag;
+}
+void InitImage(cv::Mat& outputimage)
+{
+	int rowNumber = outputimage.rows;
+	int colNumber = outputimage.cols;
+	for (int i = 0; i < rowNumber; i++)
+		for (int j = 0; j < colNumber; j++)
+			outputimage.at<double>(i, j) = 0;
+}
+std::vector<cv::Point2i> FindUnfiledNeighbors(cv::Mat const &image)
+{
+	std::vector <unfilledpoint> data;
+	for (int i = 0; i < image.rows; i++)
+	{
+		for (int j = 0; j < image.cols; j++)
+		{
+			if (image.at<double>(i, j) != 0) continue;
+			double temp = 0.0;
+			if (isinImage(i - 1, j - 1, image)) temp += image.at<double >(i - 1, j - 1);
+			if (isinImage(i - 1, j, image))     temp += image.at<double >(i - 1, j);
+			if (isinImage(i - 1, j + 1, image)) temp += image.at<double >(i - 1, j + 1);
+			if (isinImage(i, j - 1, image))     temp += image.at<double >(i, j - 1);
+			if (isinImage(i, j + 1, image))     temp += image.at<double >(i, j + 1);
+			if (isinImage(i + 1, j - 1, image)) temp += image.at<double >(i + 1, j - 1);
+			if (isinImage(i + 1, j, image))     temp += image.at<double >(i + 1, j);
+			if (isinImage(i + 1, j + 1, image)) temp += image.at<double >(i + 1, j + 1);
+			unfilledpoint tempfiledNeighbors;
+			tempfiledNeighbors.position = cv::Point2i(i, j);
+			tempfiledNeighbors.filedNeighbors = temp;
+			data.push_back(tempfiledNeighbors);
+		}
+	}
+	random_shuffle(data.begin(), data.end());
+	sort(data.begin(), data.end(), SortfiledNeighbors);
+	std::vector <cv::Point2i> result;
+	for (int i = 0; i < (int)data.size(); i++)
+	{
+		if (data[i].filedNeighbors >0)
+			result.push_back(data[i].position);
+	}
+	data.clear();
+	return result;
+}
+cv::Mat FindNeighborWindow(cv::Mat& img, cv::Point2i pixel)// 3 ok
+{
+	cv::Mat result = cv::Mat(WindowSize * 2 + 1, WindowSize * 2 + 1, CV_64FC1);//乘以2 加1 是为了让该像素成为生成的window的中心点
+	for (int i = 0; i < result.rows; i++)
+		for (int j = 0; j < result.cols; j++)
+			if (isLegalInImage(pixel.x - WindowSize + i, pixel.y - WindowSize + j, img))
+				result.at<double>(i, j) = img.at<double>(pixel.x - WindowSize + i, pixel.y - WindowSize + j);
+	return result;
+}
+void GrowImage(const cv::Mat& sampleimage, cv::Mat& outputimage, float  size)
+{
+	double MaxErrThreshold = maxerrthreshold;
+	unsigned char progress;
+	outputimage.create((int)size*sampleimage.rows, (int)size*sampleimage.cols, CV_64FC1);
+	InitImage(outputimage);
+	Loadimage(sampleimage, outputimage, size);
+	if (!((sampleimage.cols >WindowSize * 2 + 2) && (sampleimage.rows >WindowSize * 2 + 2)))
+	{
+		std::cout << "Window Size too big, it must less than or equal to " << (sampleimage.cols < sampleimage.rows ? sampleimage.cols - 2 : sampleimage.rows - 2) / 2 << std::endl;
+		getchar();
+		exit(1);
+	}
+	while (IsNotFiled(outputimage))
+	{
+		std::vector<cv::Point2i> PixelList = FindUnfiledNeighbors(outputimage);
+		if (!PixelList.size())
+		{
+			std::cout << "warning:PixelList.size()=" << PixelList.size() << "  Findpoint failed!" << std::endl;
+			break;
+		}
+		for (int i = 0; i < (int)PixelList.size(); i++)
+		{
+			std::vector<matches> BestMatches;
+			cv::Mat Template = FindNeighborWindow(outputimage, PixelList[i]);
+			BestMatches = FindMatches(Template, sampleimage, outputimage, PixelList[i], GetGaussian());
+			int which;
+			if (BestMatches.size())
+			{
+				which = rand() % BestMatches.size();
+				if (BestMatches[which].err < MaxErrThreshold)
+				{
+					outputimage.at<double>(PixelList[i].x, PixelList[i].y) = sampleimage.at<double>(BestMatches[which].position.x, BestMatches[which].position.y);
+					progress = true;
+					std::cout << "finish pixels:" << ++mtrue << std::endl;
+				}
+			}
+			else
+				std::cout << "warning:BestMatches.size()=0  Find matches failed!" << std::endl;
+		}
+		if (!progress)
+		{
+			if (MaxErrThreshold < WindowSize)
+			{
+				MaxErrThreshold *= 1.1;
+				std::cout << "MaxErrThreshold increase!" << std::endl;
+			}
+			else
+			{
+				std::cout << "MaxErrThreshold overflow!" << std::endl;
+				break;
+			}
+		}
+		std::cout << "times:" << ++monitor << std::endl;
+	}
+	std::cout << "MaxErrThreshold = " << MaxErrThreshold << std::endl;
+}
+std::vector<matches>  FindMatches(const cv::Mat& Template, const cv::Mat&sampleimage, cv::Mat& outputimage, cv::Point2i  templateCenter, cv::Mat& GaussianMask)
+{
+	int topleftx = templateCenter.x - WindowSize;
+	int toplefty = templateCenter.y - WindowSize;
+	//validmask
+	cv::Mat ValidMask = cv::Mat::zeros(Template.size(), CV_64FC1);
+	for (int i = 0; i < ValidMask.rows; i++)
+	{
+		for (int j = 0; j < ValidMask.cols; j++)
+		{
+			if (isinImage(topleftx + i, toplefty + j, outputimage))
+				ValidMask.at<double>(i, j) = 1.0;
+			else
+				ValidMask.at<double>(i, j) = 0;
+		}
+	}
+	//gaussmask
+	/*double kernalsize = (double)(WindowSize / sigma);
+	kernalsize = sqrt(kernalsize);//为了后面两个维度相乘而内核大小不变故而在这里取平方根
+	cv::Mat tmpGaussian = cv::getGaussianKernel(WindowSize * 2 + 1, kernalsize);
+	cv::Mat GaussianMask = tmpGaussian * tmpGaussian.t();//产生二维的高斯滤波内核（二维矩阵）*/
+	double TotWeight = sum(ValidMask.mul(GaussianMask))[0];//sum求array的和，求出高斯图的总权重
+	register cv::Mat SSD = cv::Mat::zeros(sampleimage.size(), CV_64FC1);//ssd
+	register double minSSD = (double)INT_MAX;
+	cv::Mat tp1 = Template;//tp1与template共享同一个矩阵
+	for (int i = 0; i < (int)(sampleimage.rows - 2 * WindowSize - 1); i++)
+	{
+		for (int j = 0; j < (int)(sampleimage.cols - 2 * WindowSize - 1); j++)
+		{
+			cv::Mat dist = cv::Mat::zeros(2 * WindowSize + 1, 2 * WindowSize + 1, CV_64FC1);//dist
+			cv::Mat tp2 = sampleimage(cv::Rect(j, i, 2 * WindowSize + 1, 2 * WindowSize + 1));//tp2和sampleimage的部分共享rect 四个参数指的是左上点的列数 行数，总列数，行数
+			dist = tp1 - tp2;
+			dist = dist.mul(dist);
+			SSD.at<double>(i, j) = (double)(sum(dist.mul(ValidMask.mul(GaussianMask)))[0] / TotWeight);//得到平方差矩阵与高斯正态分布的积
+			if (SSD.at<double>(i, j) < minSSD) minSSD = SSD.at<double>(i, j);//计算ssd最小值
+		}
+	}
+	std::vector<matches> matchList;
+	for (int i = 0; i <(int)(sampleimage.rows - 2 * WindowSize - 1); i++)
+	{
+		for (int j = 0; j < (int)(sampleimage.cols - 2 * WindowSize - 1); j++)
+		{
+			if (SSD.at<double>(i, j) <= (double)minSSD * (1 + ErrThreshold))//expandsize=4时findmatch返回0个，这是为啥？发现size=4时，ssdij=INF,导致minSSD小于ssdij
+			{
+				matches tpmatch;
+				tpmatch.position = cv::Point2i(i + WindowSize, j + WindowSize);
+				tpmatch.err = fabs(minSSD - SSD.at<double>(i, j));
+				matchList.push_back(tpmatch);
+			}
+		}
+	}
+	return matchList;
+}
+cv::Mat GetGaussian(void)
+{
+	double kernalsize = (double)(WindowSize / sigma);
+	kernalsize = sqrt(kernalsize);//为了后面两个维度相乘而内核大小不变故而在这里取平方根
+	cv::Mat tmpGaussian = cv::getGaussianKernel(WindowSize * 2 + 1, kernalsize);
+	cv::Mat GaussianMask = tmpGaussian * tmpGaussian.t();//产生二维的高斯滤波内核（二维矩阵）
+	return  GaussianMask;
+}
