@@ -11,7 +11,7 @@ To begin with you can find all the paper here:
  
 [PatchMatch: A Randomized Correspondence Algorithm for Structural Image Editing(SIGGRAPH2009)](https://gfx.cs.princeton.edu/pubs/Barnes_2009_PAR/)  
 
- [Lazy Snapping](http://home.cse.ust.hk/~cktang/sample_pub/lazy_snapping.pdf)  
+ [Lazy Snapping(SIGGRAPH'04 )](http://home.cse.ust.hk/~cktang/sample_pub/lazy_snapping.pdf)  
  
  Homography(I'm not quite sure about the origin of this notion)  
  
