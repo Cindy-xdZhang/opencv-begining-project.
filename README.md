@@ -21,7 +21,7 @@ To begin with you can find all the paper here:
  
  
 ***
-##This repo contains relement of these papers.
+##This repo contains replement of these papers.
 ### 1. code for seam-carving (just for learning) 2017.11.29
 
 
