@@ -23,4 +23,4 @@ To begin with you can find all the paper here:
 ***
 ## This repo contains replementations of these papers for reference.
 ***
-### The suggest environment is g++ 4.1/linux16.04, opencv2.4.9
+### The suggest environment is win10+vs2013+opencv2.4.9
