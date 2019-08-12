@@ -21,16 +21,6 @@ To begin with you can find all the paper here:
  
  
 ***
-##This repo contains replement of these papers.
-### 1. code for seam-carving (just for learning) 2017.11.29
-
-
-### 2. code for possion image editing  2017.11.29
-
-
-### 3. code for image sythesis 2018.4.14
-
-
-### 4. branch photometricstereo :code for photometricstereo (lightdirection is the txt file which contains the light direction parameters of this program,it work with the image {pts[i]})  
+## This repo contains replementations of these papers for reference.
 ***
 ### The suggest environment is g++ 4.1/linux16.04, opencv2.4.9
