@@ -1,7 +1,7 @@
 
 # opencv-training
 Some basic programs in computer version learning,for beginer to better understand CV and OpenCV.
-To begin with you can find all the paper here:  
+To begin with you can find all the papers here:  
 
  [Texture Synthesis by Non-parametric Sampling(ICCV'99)](https://people.eecs.berkeley.edu/~efros/research/EfrosLeung.html)  
  
