@@ -21,6 +21,6 @@ To begin with you can find all the papers here:
  
  
 ***
-## This repo contains replementations of these papers for reference.
+## This repo contains my implementations of these papers for reference.
 ***
 ### The suggest environment is win10+vs2013+opencv2.4.9
